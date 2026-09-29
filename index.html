@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>TAROMAN Fighting Game - べらぼうな格闘劇</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: 'Hiragino Kaku Gothic ProN', 'メイリオ', sans-serif;
+      color: #fff;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #000;
+    }
+    canvas {
+      background: #111;
+      box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+      touch-action: none;
+    }
+    .touch-controls {
+      position: absolute;
+      bottom: 10px;
+      left: 0;
+      width: 100%;
+      height: 140px;
+      pointer-events: none;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 10;
+    }
+    .dpad, .action-buttons {
+      pointer-events: auto;
+      position: relative;
+    }
+    .dpad {
+      width: 130px;
+      height: 130px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+    }
+    .dpad-btn {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      background: rgba(200, 200, 200, 0.5);
+      border: 2px solid #fff;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      font-size: 16px;
+      color: #fff;
+    }
+    .dpad-up { top: 5px; left: 45px; }
+    .dpad-down { bottom: 5px; left: 45px; }
+    .dpad-left { top: 45px; left: 5px; }
+    .dpad-right { top: 45px; right: 5px; }
+
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      margin-bottom: 5px;
+    }
+    .act-btn {
+      width: 55px;
+      height: 55px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      color: #fff;
+      font-weight: bold;
+      font-size: 13px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.6);
+    }
+    .btn-punch { background: #e74c3c; }
+    .btn-kick { background: #e67e22; }
+    .btn-beam { background: #9b59b6; width: 65px; height: 65px; font-size: 14px; border-color: #f1c40f; }
+    .act-btn:active, .dpad-btn:active { opacity: 0.6; transform: scale(0.92); }
+
+
+    #menu-overlay { position:absolute; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+    .menu-box { width:min(420px,78vw); padding:18px; text-align:center; pointer-events:auto; }
+    .menu-title { font-size:clamp(28px,5vw,44px); font-weight:900; line-height:1.15; color:#e74c3c; text-shadow:3px 3px #000; margin-bottom:22px; }
+    .menu-title span { font-size:.55em; color:#fff; }
+    .menu-title.small { font-size:clamp(22px,4vw,32px); color:#fff; margin-bottom:12px; }
+    #menu-overlay button { display:block; width:100%; min-height:52px; margin:9px 0; border:3px solid #fff; border-radius:12px; color:#fff; font-weight:900; font-size:18px; cursor:pointer; box-shadow:0 5px 0 rgba(0,0,0,.55); touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+    #start-button,#restart-button { background:#e74c3c; }
+    .diff.easy { background:#27ae60; } .diff.normal { background:#f39c12; } .diff.chaos { background:#8e44ad; }
+    #menu-overlay button:active { transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.55); }
+    #counter-display {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      background: #000;
+      border: 2px solid #00ff00;
+      color: #00ff00;
+      font-family: monospace;
+      padding: 4px 8px;
+      font-size: 12px;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="counter-display">訪問者数: <span id="visitor-count">000109</span></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="menu-overlay">
+      <div id="title-menu" class="menu-box">
+        <div class="menu-title">タローマン<br><span>べらぼう格闘劇</span></div>
+        <button id="start-button">タップしてスタート</button>
+      </div>
+      <div id="difficulty-menu" class="menu-box" style="display:none">
+        <div class="menu-title small">難易度を選択</div>
+        <button data-diff="EASY" class="diff easy">超簡単</button>
+        <button data-diff="NORMAL" class="diff normal">普通</button>
+        <button data-diff="NANI_KORE" class="diff chaos">なんだこれ（カオス）</button>
+      </div>
+      <div id="end-menu" class="menu-box" style="display:none"><button id="restart-button">タイトルへ戻る</button></div>
+    </div>
+
+    <div class="touch-controls">
+      <div class="dpad">
+        <div class="dpad-btn dpad-up" id="btn-up">▲</div>
+        <div class="dpad-btn dpad-down" id="btn-down">▼</div>
+        <div class="dpad-btn dpad-left" id="btn-left">◀</div>
+        <div class="dpad-btn dpad-right" id="btn-right">▶</div>
+      </div>
+      <div class="action-buttons">
+        <div class="act-btn btn-punch" id="btn-punch">なんだ<br>これは</div>
+        <div class="act-btn btn-kick" id="btn-kick">キック</div>
+        <div class="act-btn btn-beam" id="btn-beam">ビーム</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const GAME_WIDTH = 800;
+    const GAME_HEIGHT = 450;
+    let scale = 1;
+
+    function resizeCanvas() {
+      const containerWidth = window.innerWidth;
+      const containerHeight = window.innerHeight;
+      let w = containerWidth;
+      let h = containerWidth * (GAME_HEIGHT / GAME_WIDTH);
+
+      if (h > containerHeight) {
+        h = containerHeight;
+        w = containerHeight * (GAME_WIDTH / GAME_HEIGHT);
+      }
+
+      canvas.width = GAME_WIDTH;
+      canvas.height = GAME_HEIGHT;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      scale = w / GAME_WIDTH;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let count = 109;
+    try { count = parseInt(localStorage.getItem('taroman_counter') || '108', 10) + 1; localStorage.setItem('taroman_counter', String(count)); } catch (e) {}
+    document.getElementById('visitor-count').innerText = String(count).padStart(6, '0');
+
+    const keys = { left: false, right: false, up: false, down: false, punch: false, kick: false, beam: false };
+
+    function bindTouch(elementId, keyName) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      const start = (e) => { e.preventDefault(); keys[keyName] = true; };
+      const end = (e) => { e.preventDefault(); keys[keyName] = false; };
+      el.addEventListener('touchstart', start);
+      el.addEventListener('touchend', end);
+      el.addEventListener('mousedown', start);
+      el.addEventListener('mouseup', end);
+    }
+    bindTouch('btn-up', 'up');
+    bindTouch('btn-down', 'down');
+    bindTouch('btn-left', 'left');
+    bindTouch('btn-right', 'right');
+    bindTouch('btn-punch', 'punch');
+    bindTouch('btn-kick', 'kick');
+    bindTouch('btn-beam', 'beam');
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.left = true;
+      if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = true;
+      if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.up = true;
+      if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.down = true;
+      if (e.key === 'j' || e.key === 'J') keys.punch = true;
+      if (e.key === 'k' || e.key === 'K') keys.kick = true;
+      if (e.key === 'l' || e.key === 'L') keys.beam = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.left = false;
+      if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = false;
+      if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.up = false;
+      if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.down = false;
+      if (e.key === 'j' || e.key === 'J') keys.punch = false;
+      if (e.key === 'k' || e.key === 'K') keys.kick = false;
+      if (e.key === 'l' || e.key === 'L') keys.beam = false;
+    });
+
+    let gameState = 'TITLE';
+    let difficulty = 'NORMAL';
+    let currentStage = 0;
+    let isBuildingTaroman = false;
+
+    const bossList = [
+      { name: '森の掟', hp: 100, color: '#27ae60', type: 'MORI' },
+      { name: '歓喜', hp: 120, color: '#f1c40f', type: 'KANKI' },
+      { name: '縄文人', hp: 150, color: '#8e44ad', type: 'JOMON' },
+      { name: '駄々っ子', hp: 110, color: '#e67e22', type: 'DADAKKO' },
+      { name: '疾走する眼', hp: 130, color: '#e74c3c', type: 'EYE' },
+      { name: '未来の顔', hp: 140, color: '#2980b9', type: 'MIRAI' },
+      { name: '重工業巨人', hp: 180, color: '#34495e', type: 'BUILDING' },
+      { name: 'あすの神話', hp: 200, color: '#c0392b', type: 'MYTH' },
+      { name: '太陽の塔', hp: 300, color: '#f39c12', type: 'SUN' }
+    ];
+
+    let player, enemy;
+    let projectiles = [];
+    let effects = [];
+
+    class Player {
+      constructor() {
+        this.x = 100;
+        this.y = 280;
+        this.w = 50;
+        this.h = 100;
+        this.vx = 0;
+        this.vy = 0;
+        this.isGrounded = true;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.gauge = 0;
+        this.state = 'IDLE';
+        this.stateTimer = 0;
+        this.stunTimer = 0;
+        this.crouching = false;
+      }
+
+      update() {
+        if (this.stunTimer > 0) {
+          this.stunTimer--;
+          return;
+        }
+
+        if (this.state === 'IDLE') {
+          if (keys.left) this.vx = -4;
+          else if (keys.right) this.vx = 4;
+          else this.vx = 0;
+
+          // 下キーでしゃがむ
+          this.crouching = !!keys.down && this.isGrounded;
+
+          if (keys.up && this.isGrounded && !this.crouching) {
+            this.vy = -12;
+            this.isGrounded = false;
+          }
+
+          if (keys.punch && !this.crouching) {
+            this.state = 'TEXT_ATTACK';
+            this.stateTimer = 15;
+          } else if (keys.kick && !this.crouching) {
+            this.state = 'KICK';
+            this.stateTimer = 18;
+          } else if (keys.beam && this.gauge >= 100) {
+            this.state = 'BEAM';
+            this.stateTimer = 40;
+            this.gauge = 0;
+            projectiles.push({
+              x: this.x + 40,
+              y: this.y + 25,
+              w: 700,
+              h: 30,
+              life: 25,
+              type: 'BEAM',
+              owner: 'PLAYER'
+            });
+          }
+        }
+
+        this.vy += 0.6;
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.y >= 280) {
+          this.y = 280;
+          this.vy = 0;
+          this.isGrounded = true;
+        }
+
+        if (this.state !== 'IDLE') this.crouching = false;
+
+        if (this.stateTimer > 0) {
+          this.stateTimer--;
+          if (this.stateTimer <= 0) this.state = 'IDLE';
+        }
+
+        if (this.x < 10) this.x = 10;
+        if (this.x > GAME_WIDTH - 60) this.x = GAME_WIDTH - 60;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x + this.w / 2, this.y + this.h / 2);
+
+        if (!isBuildingTaroman && this.crouching) {
+          ctx.translate(0, 18);
+          ctx.scale(1, 0.62);
+        }
+
+        if (isBuildingTaroman) {
+          ctx.fillStyle = '#34495e';
+          ctx.fillRect(-42, -38, 84, 90);
+          ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.strokeRect(-42, -38, 84, 90);
+          ctx.fillStyle = '#f1c40f';
+          for(let r=0;r<4;r++) for(let c=0;c<3;c++) ctx.fillRect(-30+c*20,-25+r*18,10,9);
+          ctx.fillStyle='#555'; ctx.fillRect(-48,-18,6,42); ctx.fillRect(42,-18,6,42);
+          ctx.fillStyle='#777'; ctx.fillRect(-18,-60,10,22); ctx.fillRect(8,-68,10,30);
+          ctx.fillStyle='#f1c40f'; ctx.beginPath(); ctx.arc(0,-72,13,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#bdc3c7'; ctx.fillRect(-58,5,22,10); ctx.fillRect(36,5,22,10); ctx.fillRect(-18,50,10,25); ctx.fillRect(8,50,10,25);
+          // ビルを被った後も頭のめらめらを残す
+          for (let i=0;i<16;i++) {
+            const a=(Math.PI*2*i)/16, r1=14, r2=18+(i%2);
+            ctx.strokeStyle=i%2===0?'#ff3b18':'#f39c12'; ctx.lineWidth=2.2; ctx.lineCap='round';
+            ctx.beginPath(); ctx.moveTo(Math.cos(a)*r1, -72+Math.sin(a)*r1); ctx.lineTo(Math.cos(a)*r2,-72+Math.sin(a)*r2); ctx.stroke();
+          }
+        }
+
+        if (!isBuildingTaroman) {
+        // 頭のめらめらを一本ずつ細く、頭のまわり360°に描く
+        for (let i = 0; i < 16; i++) {
+          const a = (Math.PI * 2 * i) / 16;
+          const r1 = 19, r2 = 24 + (i % 2) * 1;
+          ctx.strokeStyle = i % 2 === 0 ? '#ff3b18' : '#f39c12';
+          ctx.lineWidth = 2.5;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a)*r1, -45 + Math.sin(a)*r1);
+          ctx.lineTo(Math.cos(a)*r2, -45 + Math.sin(a)*r2);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath();
+        ctx.arc(0, -45, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#d35400';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#000';
+        ctx.fillRect(-6, -50, 4, 10);
+        ctx.fillRect(2, -50, 4, 10);
+
+        if (!isBuildingTaroman) {
+          ctx.fillStyle = '#e74c3c';
+          ctx.fillRect(-15, -30, 30, 50);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(-5, -20, 10, 30);
+        }
+
+        ctx.fillStyle = '#bdc3c7';
+        if (this.state === 'KICK') {
+          ctx.fillRect(-10, 20, 10, 30);
+          ctx.fillStyle = '#e74c3c';
+          ctx.fillRect(0, -5, 45, 15);
+        } else {
+          ctx.fillRect(-12, 20, 10, 30);
+          ctx.fillRect(2, 20, 10, 30);
+        }
+
+        if (this.state === 'TEXT_ATTACK') {
+          ctx.fillStyle = '#fff';
+          ctx.strokeStyle = '#111';
+          ctx.lineWidth = 4;
+          ctx.font = 'bold 24px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.strokeText('なんだこれは', 18, -18);
+          ctx.fillText('なんだこれは', 18, -18);
+        } else if (this.state === 'BEAM') {
+          ctx.fillStyle = '#e74c3c';
+          ctx.fillRect(5, -20, 30, 10);
+          ctx.fillStyle = '#f1c40f';
+          ctx.beginPath();
+          ctx.arc(35, -15, 8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        }
+
+        if (this.stunTimer > 0) {
+          ctx.strokeStyle = '#f1c40f';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-20, -50); ctx.lineTo(20, 40);
+          ctx.moveTo(20, -50); ctx.lineTo(-20, 40);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    class Enemy {
+      constructor(data) {
+        this.name = data.name;
+        this.type = data.type;
+        this.hp = data.hp;
+        this.maxHp = data.hp;
+        this.x = 600;
+        this.y = 280;
+        this.w = 60;
+        this.h = 100;
+        this.vx = 0;
+        this.vy = 0;
+        this.color = data.color;
+        this.state = 'IDLE';
+        this.stateTimer = 50;
+        this.attackCooldown = 50;
+        this.eyeDir = -1;
+        this.attackHits = 0;
+        this.faceParts = 4;
+        this.diveHit = false;
+        this.flailPhase = 0;
+        this.anim = 0;
+
+        if (this.type === 'SUN') {
+          // 円錐の身体＋円錐の両腕
+          ctx.fillStyle='#eee';
+          ctx.beginPath(); ctx.moveTo(-55,85); ctx.lineTo(0,-105); ctx.lineTo(55,85); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle='#222'; ctx.lineWidth=5; ctx.stroke();
+          ctx.fillStyle='#ddd';
+          ctx.beginPath(); ctx.moveTo(-45,-25); ctx.lineTo(-115,10); ctx.lineTo(-48,18); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(45,-25); ctx.lineTo(115,10); ctx.lineTo(48,18); ctx.closePath(); ctx.fill();
+          // 頭
+          ctx.fillStyle='#f1c40f'; ctx.beginPath(); ctx.arc(0,-125,34,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111'; ctx.fillRect(-12,-135,7,16); ctx.fillRect(5,-135,7,16);
+          // 胸の太陽
+          ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(0,15,25,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#f1c40f'; ctx.beginPath(); ctx.arc(0,15,17,0,Math.PI*2); ctx.fill();
+
+        } else if (this.type === 'JOMON') {
+          ctx.fillStyle='#8e44ad';
+          ctx.beginPath();
+          ctx.moveTo(-31,55); ctx.lineTo(-27,10); ctx.lineTo(-38,-5); ctx.lineTo(-30,-28);
+          ctx.lineTo(-18,-25); ctx.lineTo(-24,-50); ctx.lineTo(-10,-61); ctx.lineTo(0,-48);
+          ctx.lineTo(13,-62); ctx.lineTo(25,-48); ctx.lineTo(20,-25); ctx.lineTo(35,-29);
+          ctx.lineTo(40,-4); ctx.lineTo(27,10); ctx.lineTo(31,55); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle='#35134f'; ctx.lineWidth=4; ctx.stroke();
+          ctx.fillStyle='#f39c12';
+          ctx.beginPath(); ctx.ellipse(-14,-17,9,6,0,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(14,-17,9,6,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111'; ctx.fillRect(-17,-19,6,4); ctx.fillRect(11,-19,6,4);
+          ctx.strokeStyle='#f1c40f'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(0,18,17,0,Math.PI*1.5); ctx.stroke();
+          // 口から泥を吐くための大きな口
+          ctx.fillStyle='#2b160f'; ctx.beginPath(); ctx.ellipse(-18,18,10,7,0,0,Math.PI*2); ctx.fill();
+
+        } else if (this.type === 'MORI') {
+          ctx.fillStyle='#174d2b';
+          ctx.beginPath();
+          ctx.moveTo(-35,55); ctx.lineTo(-30,8); ctx.lineTo(-45,-12); ctx.lineTo(-25,-8);
+          ctx.lineTo(-38,-42); ctx.lineTo(-12,-28); ctx.lineTo(0,-60); ctx.lineTo(12,-28);
+          ctx.lineTo(38,-42); ctx.lineTo(25,-8); ctx.lineTo(45,-12); ctx.lineTo(30,8);
+          ctx.lineTo(35,55); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle='#102d1c'; ctx.lineWidth=5; ctx.stroke();
+          ctx.fillStyle='#6d3b1f'; ctx.fillRect(-11,5,22,50);
+          ctx.fillStyle='#e74c3c'; ctx.beginPath(); ctx.arc(0,-22,22,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111'; ctx.fillRect(-9,-27,5,10); ctx.fillRect(4,-27,5,10);
+          ctx.fillStyle='#27ae60'; ctx.beginPath(); ctx.arc(-25,-48,14,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(25,-48,14,0,Math.PI*2); ctx.fill();
+
+        } else if (this.type === 'KANKI') {
+          ctx.fillStyle='#d49b00';
+          ctx.beginPath();
+          ctx.moveTo(-38,-30); ctx.quadraticCurveTo(-34,-60,0,-66);
+          ctx.quadraticCurveTo(34,-60,38,-30); ctx.lineTo(48,45);
+          ctx.quadraticCurveTo(0,63,-48,45); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle='#6b4b00'; ctx.lineWidth=5; ctx.stroke();
+          ctx.strokeStyle='#f7dc55'; ctx.lineWidth=7;
+          ctx.beginPath(); ctx.moveTo(-35,-12); ctx.lineTo(35,-12); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-42,25); ctx.lineTo(42,25); ctx.stroke();
+          ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(-12,5,5,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(12,5,5,0,Math.PI*2); ctx.fill();
+          ctx.strokeStyle='#111'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(0,12,13,0,Math.PI); ctx.stroke();
+
+        } else if (this.type === 'DADAKKO') {
+          ctx.fillStyle='#e67e22'; ctx.beginPath(); ctx.arc(0,-18,43,0,Math.PI*2); ctx.fill();
+          ctx.strokeStyle='#7a3b0b'; ctx.lineWidth=4; ctx.stroke();
+          ctx.fillStyle='#8e44ad';
+          for(let a=-2.5;a<=2.5;a+=0.7){ ctx.beginPath(); ctx.arc(Math.sin(a)*30,-48+Math.cos(a)*7,10,0,Math.PI*2); ctx.fill(); }
+          ctx.fillStyle='#111'; ctx.fillRect(-19,-25,8,7); ctx.fillRect(11,-25,8,7);
+          ctx.strokeStyle='#111'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(0,-4,18,0,Math.PI); ctx.stroke();
+          ctx.fillStyle='#3498db';
+          ctx.beginPath(); ctx.moveTo(-25,-17); ctx.lineTo(-20,0); ctx.lineTo(-29,0); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(25,-17); ctx.lineTo(29,0); ctx.lineTo(20,0); ctx.closePath(); ctx.fill();
+          const wig = this.state === 'DADA_FLAIL' ? Math.sin(this.flailPhase)*18 : 0;
+          ctx.strokeStyle='#e67e22'; ctx.lineWidth=12; ctx.lineCap='round'; ctx.beginPath();
+          ctx.moveTo(-38,15); ctx.lineTo(-58,35+wig); ctx.moveTo(38,15); ctx.lineTo(58,35-wig);
+          ctx.moveTo(-22,20); ctx.lineTo(-30-wig,58); ctx.moveTo(22,20); ctx.lineTo(30+wig,58); ctx.stroke(); ctx.lineCap='butt';
+
+        } else if (this.type === 'EYE') {
+          ctx.fillStyle='#eee';
+          ctx.beginPath(); ctx.moveTo(-58,-8); ctx.quadraticCurveTo(0,-52,58,-8);
+          ctx.quadraticCurveTo(0,38,-58,-8); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle='#222'; ctx.lineWidth=5; ctx.stroke();
+          ctx.fillStyle='#e74c3c'; ctx.beginPath(); ctx.arc(0,-8,23,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(0,-8,9,0,Math.PI*2); ctx.fill();
+          ctx.strokeStyle='#111'; ctx.lineWidth=4;
+          for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*18,-34); ctx.lineTo(i*25,-48); ctx.stroke(); }
+          ctx.strokeStyle='#e74c3c'; ctx.lineWidth=12; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(-18,25); ctx.lineTo(-48,55); ctx.moveTo(18,25); ctx.lineTo(50,45); ctx.stroke(); ctx.lineCap='butt';
+
+        } else if (this.type === 'BUILDING') {
+          ctx.fillStyle='#34495e'; ctx.fillRect(-34,-52,68,108);
+          ctx.strokeStyle='#111'; ctx.lineWidth=5; ctx.strokeRect(-34,-52,68,108);
+          ctx.fillStyle='#566573'; ctx.fillRect(-53,-35,20,42); ctx.fillRect(33,-35,20,42);
+          ctx.fillStyle='#555'; ctx.fillRect(-25,-78,12,28); ctx.fillRect(15,-88,12,38);
+          ctx.fillStyle='#777'; ctx.beginPath(); ctx.arc(-19,-84,8,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(21,-96,9,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#f1c40f';
+          for(let row=0;row<4;row++) for(let col=0;col<3;col++) ctx.fillRect(-23+col*17,-38+row*20,9,12);
+          ctx.fillStyle='#111'; ctx.fillRect(-34,3,68,8);
+          ctx.fillStyle='#f1c40f'; ctx.fillRect(-6,3,12,8);
+          ctx.fillStyle='#263746'; ctx.fillRect(-27,56,18,28); ctx.fillRect(9,56,18,28);
+
+        } else if (this.type === 'MYTH') {
+          if (this.state === 'MYTH_DIVE') { ctx.globalAlpha = 0.92; }
+          ctx.fillStyle='#8f1d16';
+          ctx.beginPath(); ctx.moveTo(-38,58); ctx.lineTo(-48,15); ctx.lineTo(-30,-8); ctx.lineTo(-48,-38);
+          ctx.lineTo(-20,-28); ctx.lineTo(-25,-65); ctx.lineTo(0,-42); ctx.lineTo(25,-68);
+          ctx.lineTo(20,-28); ctx.lineTo(50,-40); ctx.lineTo(30,-8); ctx.lineTo(47,15);
+          ctx.lineTo(38,58); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle='#3a0c09'; ctx.lineWidth=5; ctx.stroke();
+          ctx.fillStyle='#f1c40f'; ctx.beginPath(); ctx.arc(0,-10,24,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111'; ctx.fillRect(-13,-17,7,10); ctx.fillRect(6,-17,7,10); ctx.fillRect(-8,3,16,5);
+          ctx.fillStyle='#e67e22'; ctx.beginPath(); ctx.moveTo(-20,48); ctx.lineTo(-8,15); ctx.lineTo(2,39); ctx.lineTo(14,8); ctx.lineTo(25,50); ctx.closePath(); ctx.fill();
+          ctx.globalAlpha = 1;
+
+        } else {
+          // 未来の顔
+          ctx.fillStyle='#2980b9';
+          ctx.beginPath(); ctx.moveTo(-38,45); ctx.lineTo(-30,-35); ctx.lineTo(-15,-55);
+          ctx.lineTo(8,-50); ctx.lineTo(35,-30); ctx.lineTo(40,45); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle='#123a57'; ctx.lineWidth=5; ctx.stroke();
+          if (this.faceParts >= 3) {
+            ctx.fillStyle='#ecf0f1';
+            ctx.beginPath(); ctx.arc(-12,-10,14,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(-9,-9,5,0,Math.PI*2); ctx.fill();
+          }
+          if (this.faceParts >= 2) {
+            ctx.fillStyle='#ecf0f1';
+            ctx.beginPath(); ctx.arc(15,0,18,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(18,0,6,0,Math.PI*2); ctx.fill();
+          }
+          if (this.faceParts >= 1) {
+            ctx.strokeStyle='#e74c3c'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(4,25,18,0,Math.PI); ctx.stroke();
+          }
+          if (this.faceParts >= 4) {
+            ctx.strokeStyle='#2980b9'; ctx.lineWidth=13; ctx.lineCap='round';
+            ctx.beginPath(); ctx.moveTo(-32,10); ctx.lineTo(-58,35); ctx.moveTo(32,10); ctx.lineTo(58,25); ctx.stroke(); ctx.lineCap='butt';
+          }
+        }
+
+        ctx.restore();
+      }
+
+      takeDamage(amount) {
+        if (this.state === 'DOWN') return;
+        this.hp -= amount;
+        this.attackHits++;
+        if (player) player.gauge = Math.min(100, player.gauge + 8);
+        if (this.type === 'MIRAI' && this.attackHits % 3 === 0 && this.faceParts > 0) {
+          this.faceParts--;
+          effects.push({x:this.x,y:this.y-60,text:'顔のパーツがポロッ！',life:45});
+        }
+        if (this.hp <= 0) { this.hp=0; this.state='DOWN'; this.stateTimer=45; }
+      }
+
+      update() {
+        if (this.state === 'DOWN') return;
+        this.anim++;
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        const rate = difficulty==='EASY' ? 1.35 : difficulty==='NANI_KORE' ? 0.65 : 1;
+        const near = player && Math.abs(player.x-this.x)<95;
+
+        if (this.type==='EYE') {
+          this.x += this.eyeDir*10;
+          if (this.x<90) this.eyeDir=1;
+          if (this.x>GAME_WIDTH-110) this.eyeDir=-1;
+          if (near && this.attackCooldown<=0) player.hp-=12;
+          if (this.attackCooldown<=0) this.attackCooldown=Math.round(55*rate);
+          return;
+        }
+        if (this.type==='MYTH') {
+          if (this.state==='MYTH_RISE') {
+            this.y-=5;
+            if (this.y<=90) { this.state='MYTH_DIVE'; this.diveHit=false; }
+          } else if (this.state==='MYTH_DIVE') {
+            this.y+=13;
+            this.x+=Math.sign((player?.x??400)-this.x)*4;
+            if (Math.abs(this.x-player.x)<55 && Math.abs(this.y-player.y)<80) {
+              player.hp-=25; this.diveHit=true; this.state='IDLE'; this.y=280;
+            } else if (this.y>=280) {
+              this.y=280;
+              if (!this.diveHit) this.hp=Math.max(1,this.hp-Math.floor(this.maxHp/3));
+              this.state='IDLE'; this.attackCooldown=Math.round(100*rate);
+            }
+          } else if (this.attackCooldown<=0) {
+            this.state='MYTH_RISE'; this.attackCooldown=Math.round(160*rate);
+          }
+          return;
+        }
+        if (this.type==='DADAKKO' && this.state==='DADA_FLAIL') {
+          this.flailPhase+=.35; this.stateTimer--;
+          if (near) player.hp-=1.2;
+          if (this.stateTimer<=0) { this.state='IDLE'; this.attackCooldown=Math.round(70*rate); }
+          return;
+        }
+        if (this.attackCooldown<=0) {
+          if (this.type==='JOMON') {
+            projectiles.push({x:this.x-42,y:this.y+5,vx:-8,vy:0,w:120,h:18,life:38,type:'MUD_BEAM',owner:'ENEMY'});
+            this.attackCooldown=Math.round(85*rate);
+          } else if (this.type==='KANKI') {
+            projectiles.push({x:this.x-35,y:this.y-25,vx:-4,vy:Math.sin(this.anim/10),radius:12,type:'NOTE',owner:'ENEMY'});
+            this.attackCooldown=Math.round(95*rate);
+          } else if (this.type==='DADAKKO') {
+            this.state='DADA_FLAIL'; this.stateTimer=38; this.flailPhase=0;
+          } else if (this.type==='SUN') {
+            if (Math.random()<.55) projectiles.push({x:this.x,y:this.y-110,vx:(Math.random()*2-1)*3,vy:3+Math.random()*2,radius:10,type:'SUNBALL',owner:'ENEMY'});
+            else projectiles.push({x:this.x-350,y:this.y-5,vx:-2,vy:0,w:700,h:24,life:45,type:'SUNBEAM',owner:'ENEMY'});
+            this.attackCooldown=Math.round(75*rate);
+          } else {
+            if (near) player.hp-=difficulty==='NANI_KORE'?12:8;
+            this.attackCooldown=Math.round(65*rate);
+          }
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x+this.w/2,this.y+this.h/2);
+        const pulse=Math.sin(this.anim*.18)*3;
+        if (this.type==='MORI') {
+          // 木の枝・角・幹・赤い顔を強調した森の掟
+          ctx.fillStyle='#6d3b1f'; ctx.fillRect(-12,-2,24,65);
+          ctx.strokeStyle='#6d3b1f'; ctx.lineWidth=12; ctx.lineCap='round'; ctx.beginPath();
+          ctx.moveTo(-8,12);ctx.lineTo(-42,-25);ctx.moveTo(8,10);ctx.lineTo(42,-28);ctx.moveTo(-2,25);ctx.lineTo(-50,5);ctx.moveTo(2,28);ctx.lineTo(50,5);ctx.stroke();ctx.lineCap='butt';
+          ctx.fillStyle='#174d2b'; ctx.beginPath();ctx.arc(-38,-35,25,0,Math.PI*2);ctx.arc(38,-38,25,0,Math.PI*2);ctx.fill();
+          // 角
+          ctx.fillStyle='#d8c39a';ctx.beginPath();ctx.moveTo(-24,-36);ctx.lineTo(-43,-68);ctx.lineTo(-12,-47);ctx.closePath();ctx.fill();
+          ctx.beginPath();ctx.moveTo(24,-36);ctx.lineTo(43,-68);ctx.lineTo(12,-47);ctx.closePath();ctx.fill();
+          // 赤い顔
+          ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.arc(0,-24,25+pulse,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#111';ctx.fillRect(-9,-30,5,10);ctx.fillRect(4,-30,5,10);ctx.strokeStyle='#111';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,-17,10,0,Math.PI);ctx.stroke();
+        } else if (this.type==='KANKI') {
+          // 梵鐘らしい裾広がりの鐘＋帯＋顔
+          ctx.fillStyle='#b58a22';ctx.beginPath();ctx.moveTo(-34,-48);ctx.quadraticCurveTo(-42,-15,-50,38);ctx.quadraticCurveTo(-42,58,0,64);ctx.quadraticCurveTo(42,58,50,38);ctx.quadraticCurveTo(42,-15,34,-48);ctx.quadraticCurveTo(0,-68,-34,-48);ctx.closePath();ctx.fill();
+          ctx.strokeStyle='#624a12';ctx.lineWidth=5;ctx.stroke();
+          ctx.fillStyle='#d8b84a';ctx.fillRect(-42,-5,84,10);ctx.fillRect(-47,27,94,8);
+          ctx.fillStyle='#111';ctx.beginPath();ctx.arc(-13,10,5,0,Math.PI*2);ctx.arc(13,10,5,0,Math.PI*2);ctx.fill();
+          ctx.strokeStyle='#111';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,15,14,0,Math.PI);ctx.stroke();
+          ctx.fillStyle='#8c6b18';ctx.beginPath();ctx.arc(0,66,9,0,Math.PI*2);ctx.fill();
+        } else if (this.type==='JOMON') {
+          ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(0,0,45,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#2b160f'; ctx.beginPath(); ctx.ellipse(-15,12,12,8,0,0,Math.PI*2); ctx.fill();
+        } else if (this.type==='DADAKKO') {
+          if (this.state === 'DADA_FLAIL') {
+            // あおむけに倒れて、手足をじたばたさせる
+            const wig = Math.sin(this.flailPhase) * 22;
+            ctx.fillStyle=this.color;
+            ctx.beginPath(); ctx.ellipse(0,12,58,30,0,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle='#7a3b0b'; ctx.lineWidth=4; ctx.stroke();
+            // 顔を上向きに見せる
+            ctx.fillStyle=this.color;
+            ctx.beginPath(); ctx.arc(-30,-15,32,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle='#7a3b0b'; ctx.lineWidth=4; ctx.stroke();
+            ctx.fillStyle='#111'; ctx.fillRect(-43,-22,7,6); ctx.fillRect(-25,-22,7,6);
+            ctx.strokeStyle='#111'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(-34,-8,14,0,Math.PI); ctx.stroke();
+            // 両腕を上にばたばた
+            ctx.strokeStyle=this.color; ctx.lineWidth=12; ctx.lineCap='round'; ctx.beginPath();
+            ctx.moveTo(-38,5); ctx.lineTo(-62,-20-wig); ctx.moveTo(38,5); ctx.lineTo(62,-20+wig); ctx.stroke();
+            // 両脚もばたばた
+            ctx.beginPath();
+            ctx.moveTo(-28,28); ctx.lineTo(-45,58+wig); ctx.moveTo(28,28); ctx.lineTo(45,58-wig); ctx.stroke();
+            ctx.lineCap='butt';
+          } else {
+            ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(0,-5,43,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle='#7a3b0b'; ctx.lineWidth=4; ctx.stroke();
+            ctx.strokeStyle=this.color; ctx.lineWidth=12; ctx.lineCap='round'; ctx.beginPath();
+            ctx.moveTo(-35,15);ctx.lineTo(-60,35);ctx.moveTo(35,15);ctx.lineTo(60,35);ctx.stroke();ctx.lineCap='butt';
+          }
+        } else if (this.type==='EYE') {
+          ctx.fillStyle='#eee'; ctx.beginPath(); ctx.ellipse(0,-5,58,38,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#e74c3c'; ctx.beginPath(); ctx.arc(0,-5,24+pulse,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(0,-5,9,0,Math.PI*2); ctx.fill();
+        } else if (this.type==='MIRAI') {
+          ctx.fillStyle=this.color; ctx.fillRect(-42,-55,84,105);
+          if(this.faceParts>=3){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(-15,-10,14,0,Math.PI*2);ctx.fill();}
+          if(this.faceParts>=2){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(15,-5,18,0,Math.PI*2);ctx.fill();}
+          if(this.faceParts>=1){ctx.strokeStyle='#e74c3c';ctx.lineWidth=5;ctx.beginPath();ctx.arc(0,20,18,0,Math.PI);ctx.stroke();}
+        } else if (this.type==='BUILDING') {
+          ctx.fillStyle=this.color;ctx.fillRect(-40,-60,80,115);ctx.strokeStyle='#111';ctx.lineWidth=5;ctx.strokeRect(-40,-60,80,115);
+          ctx.fillStyle='#f1c40f'; for(let r=0;r<4;r++)for(let c=0;c<3;c++)ctx.fillRect(-28+c*20,-40+r*20,10,12);
+        } else if (this.type==='MYTH') {
+          ctx.fillStyle=this.color;ctx.beginPath();ctx.moveTo(-45,55);ctx.lineTo(0,-65);ctx.lineTo(45,55);ctx.closePath();ctx.fill();
+          ctx.fillStyle='#f1c40f';ctx.beginPath();ctx.arc(0,-15,23,0,Math.PI*2);ctx.fill();
+        } else if (this.type==='SUN') {
+          ctx.fillStyle='#eee';ctx.beginPath();ctx.moveTo(-55,60);ctx.lineTo(0,-100);ctx.lineTo(55,60);ctx.closePath();ctx.fill();
+          ctx.fillStyle='#f1c40f';ctx.beginPath();ctx.arc(0,-115,30,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#111';ctx.beginPath();ctx.arc(0,10,23,0,Math.PI*2);ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    function initGame() {
+      player = new Player();
+      enemy = new Enemy(bossList[currentStage]);
+      projectiles = [];
+      effects = [];
+    }
+
+    function update() {
+      if (gameState !== 'PLAYING') return;
+
+      player.update();
+      enemy.update();
+
+      if (player.state === 'TEXT_ATTACK' && player.stateTimer === 10) {
+        if (Math.abs(player.x - enemy.x) < 125) enemy.takeDamage(14);
+      }
+      if (player.state === 'KICK' && player.stateTimer === 12) {
+        if (Math.abs(player.x - enemy.x) < 90) enemy.takeDamage(22);
+      }
+
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        let p = projectiles[i];
+        if (p.type === 'BEAM') {
+          p.life--;
+          if (enemy.state !== 'DOWN' && Math.abs(enemy.y - player.y) < 100) {
+            enemy.takeDamage(2);
+          }
+          if (p.life <= 0) projectiles.splice(i, 1);
+        } else {
+          p.x += p.vx || 0;
+          p.y += p.vy || 0;
+          if (p.type === 'SUNBEAM') p.life--;
+          if (p.x < -120 || p.x > GAME_WIDTH + 120 || p.y < -120 || p.y > GAME_HEIGHT + 120) {
+            projectiles.splice(i, 1);
+            continue;
+          }
+
+          if (p.owner === 'ENEMY' && ((p.type === 'SUNBEAM' && p.x < player.x+25 && p.x+p.w > player.x-25 && Math.abs(p.y-player.y)<55) || (p.type === 'MUD_BEAM' && p.x < player.x+30 && p.x+p.w > player.x-30 && Math.abs(p.y-player.y)<35) || (p.type !== 'SUNBEAM' && p.type !== 'MUD_BEAM' && Math.abs(p.x - player.x) < 35 && Math.abs(p.y - player.y) < 50))) {
+            if (p.type === 'NOTE') {
+              player.stunTimer = 90;
+              effects.push({ x: player.x, y: player.y, text: 'ビリビリ！', life: 30 });
+            } else {
+              player.hp -= 15;
+            }
+            projectiles.splice(i, 1);
+          } else if (p.type === 'SUNBEAM' && p.life <= 0) {
+            projectiles.splice(i, 1);
+          }
+        }
+      }
+
+      if (enemy.hp <= 0) {
+        if (enemy.type === 'BUILDING') {
+          isBuildingTaroman = true;
+        }
+
+        currentStage++;
+        if (currentStage >= bossList.length) {
+          setState('CLEAR');
+        } else {
+          enemy = new Enemy(bossList[currentStage]);
+        }
+      }
+
+      if (player.hp <= 0) {
+        setState('GAMEOVER');
+      }
+    }
+
+    function drawBattleBackground(stage) {
+      // 各対戦ごとに違う、軽量なオリジナル背景画
+      const skies = ['#b9d9b0','#d9c27a','#8db7d9','#f2c3a0','#30394d','#596f91','#68727a','#7e4037','#c7c9ce'];
+      const ground = ['#355b35','#6d5735','#4f6d7a','#9a6a43','#222936','#46556b','#4b5155','#3b2420','#777b80'];
+      ctx.fillStyle = skies[stage] || '#111'; ctx.fillRect(0,0,GAME_WIDTH,380);
+
+      if(stage===0){ // 森の掟
+        ctx.fillStyle='#29452b';
+        for(let x=20;x<820;x+=70){ ctx.fillRect(x,120+(x%90),28,260); ctx.beginPath();ctx.arc(x+14,100+(x%80),70,0,Math.PI*2);ctx.fill(); }
+        ctx.strokeStyle='#6b4324';ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(0,290);ctx.quadraticCurveTo(180,210,340,285);ctx.quadraticCurveTo(520,350,800,230);ctx.stroke();
+      } else if(stage===1){ // 歓喜・鐘堂
+        ctx.fillStyle='#6d5a43';ctx.fillRect(80,110,640,270); ctx.fillStyle='#8d7658';ctx.fillRect(120,75,560,35);
+        ctx.fillStyle='#b89445';ctx.beginPath();ctx.moveTo(260,250);ctx.quadraticCurveTo(260,95,400,70);ctx.quadraticCurveTo(540,95,540,250);ctx.lineTo(570,290);ctx.lineTo(230,290);ctx.closePath();ctx.fill();
+        ctx.fillStyle='#513d2b';ctx.fillRect(250,300,300,12);
+        ctx.strokeStyle='#d6b85a';ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(280,205);ctx.lineTo(520,205);ctx.stroke();
+      } else if(stage===2){ // 縄文
+        ctx.fillStyle='#c99b70'; for(let x=0;x<800;x+=55){ctx.beginPath();ctx.arc(x,300,55,Math.PI,Math.PI*2);ctx.fill();}
+        ctx.fillStyle='#7b4c2e';ctx.fillRect(80,205,15,175);ctx.fillRect(690,185,18,195);
+        ctx.fillStyle='#5e3a26';for(let i=0;i<10;i++){ctx.beginPath();ctx.arc(90+i*65,150+(i%2)*25,35,0,Math.PI*2);ctx.fill();}
+      } else if(stage===3){ // 駄々っ子
+        ctx.fillStyle='#f4d28c';ctx.fillRect(0,300,800,80);ctx.fillStyle='#eab86a';
+        for(let i=0;i<9;i++){ctx.beginPath();ctx.arc(50+i*95,280,45,Math.PI,Math.PI*2);ctx.fill();}
+        ctx.fillStyle='#d77b38';for(let i=0;i<7;i++)ctx.fillRect(70+i*115,100+(i%2)*35,10,200);
+      } else if(stage===4){ // 疾走する眼
+        ctx.fillStyle='#171c2a';ctx.fillRect(0,0,800,380);ctx.strokeStyle='#4b556d';ctx.lineWidth=3;
+        for(let y=50;y<360;y+=45){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(800,y-80);ctx.stroke();}
+        ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;for(let i=0;i<15;i++){ctx.beginPath();ctx.moveTo(i*60,360);ctx.lineTo(i*60+100,0);ctx.stroke();}
+      } else if(stage===5){ // 未来の顔
+        ctx.fillStyle='#6e88aa';for(let x=0;x<800;x+=80)ctx.fillRect(x,70,55,310);
+        ctx.fillStyle='#9bb3cf';for(let x=20;x<800;x+=80)for(let y=95;y<360;y+=48)ctx.fillRect(x,y,30,18);
+        ctx.fillStyle='#dbe6f2';ctx.fillRect(0,315,800,65);
+      } else if(stage===6){ // 重工業巨人
+        ctx.fillStyle='#454d52';for(let x=0;x<800;x+=110){ctx.fillRect(x,120+(x%3)*25,80,260);ctx.fillStyle='#d2a12e';for(let y=150;y<360;y+=45)ctx.fillRect(x+18,y,30,15);ctx.fillStyle='#454d52';}
+        ctx.fillStyle='#252a2d';ctx.fillRect(0,320,800,60);ctx.fillStyle='#b8b8b8';for(let x=0;x<800;x+=55)ctx.fillRect(x,345,28,8);
+      } else if(stage===7){ // あすの神話
+        ctx.fillStyle='#5c2520';ctx.fillRect(0,80,800,300);ctx.fillStyle='#a43d2d';
+        for(let i=0;i<9;i++){ctx.beginPath();ctx.moveTo(400,90);ctx.lineTo(400+(i-4)*85,380);ctx.lineTo(400+(i-3)*85,380);ctx.closePath();ctx.fill();}
+        ctx.fillStyle='#e4b34b';ctx.beginPath();ctx.arc(400,120,55,0,Math.PI*2);ctx.fill();
+      } else { // 太陽の塔
+        ctx.fillStyle='#e7e1c7';ctx.fillRect(0,0,800,380);ctx.fillStyle='#8aa06f';ctx.fillRect(0,290,800,90);
+        ctx.fillStyle='#b6a98b';ctx.fillRect(110,100,580,190);ctx.fillStyle='#c9b99a';ctx.fillRect(180,65,440,35);
+        ctx.fillStyle='#f39c12';ctx.beginPath();ctx.arc(400,155,70,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#c0392b';ctx.beginPath();ctx.arc(400,155,42,0,Math.PI*2);ctx.fill();
+      }
+      ctx.fillStyle=ground[stage] || '#222'; ctx.fillRect(0,380,GAME_WIDTH,70);
+      ctx.fillStyle='rgba(0,0,0,.14)';ctx.fillRect(0,0,GAME_WIDTH,380);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      if (gameState === 'PLAYING') drawBattleBackground(currentStage);
+      else { ctx.fillStyle = '#111'; ctx.fillRect(0,0,GAME_WIDTH,GAME_HEIGHT); ctx.fillStyle='#222';ctx.fillRect(0,380,GAME_WIDTH,70); }
+
+      if (gameState === 'TITLE') {
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 36px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('タローマン べらぼう格闘劇', GAME_WIDTH/2, 150);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '20px sans-serif';
+        ctx.fillText('タップまたはクリックしてスタート！', GAME_WIDTH/2, 260);
+        return;
+      }
+
+      if (gameState === 'SELECT_DIFF') {
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('難易度を選択してください', GAME_WIDTH/2, 100);
+
+        ctx.fillStyle = '#2ecc71';
+        ctx.fillRect(250, 150, 300, 50);
+        ctx.fillStyle = '#f39c12';
+        ctx.fillRect(250, 220, 300, 50);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(250, 290, 300, 50);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('超簡単', GAME_WIDTH/2, 182);
+        ctx.fillText('普通', GAME_WIDTH/2, 252);
+        ctx.fillText('なんだこれ (カオス)', GAME_WIDTH/2, 322);
+        return;
+      }
+
+      if (gameState === 'PLAYING') {
+        player.draw();
+        enemy.draw();
+
+        projectiles.forEach(p => {
+          if (p.type === 'BEAM') {
+            ctx.fillStyle = `hsl(${Math.random() * 360}, 100%, 50%)`;
+            ctx.fillRect(p.x, p.y - 15, p.w, p.h);
+          } else if (p.type === 'MUD_BEAM') {
+            ctx.fillStyle = '#795548';
+            ctx.fillRect(p.x, p.y - p.h/2, p.w, p.h);
+            ctx.fillStyle = '#5d4037';
+            ctx.beginPath(); ctx.arc(p.x + 8, p.y, 11, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(p.x + p.w - 8, p.y, 7, 0, Math.PI*2); ctx.fill();
+          } else if (p.type === 'MUD') {
+            ctx.fillStyle = '#795548';
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill();
+          } else if (p.type === 'NOTE') {
+            ctx.fillStyle = '#f1c40f';
+            ctx.font = '24px sans-serif';
+            ctx.fillText('♪', p.x, p.y);
+          } else if (p.type === 'SUNBALL') {
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.arc(p.x,p.y,p.radius,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle='#e74c3c'; ctx.lineWidth=2; ctx.stroke();
+          } else if (p.type === 'SUNBEAM') {
+            ctx.fillStyle = '#ff8c00'; ctx.fillRect(p.x,p.y-p.h/2,p.w,p.h);
+            ctx.fillStyle = '#fff'; ctx.fillRect(p.x,p.y-4,p.w,8);
+          } else {
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.radius || 10, 0, Math.PI*2); ctx.fill();
+          }
+        });
+
+        for (let i = effects.length - 1; i >= 0; i--) {
+          const ef = effects[i];
+          ctx.fillStyle = '#f1c40f';
+          ctx.font = 'bold 18px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(ef.text, ef.x, ef.y);
+          ef.life--;
+          ef.y -= 0.5;
+          if (ef.life <= 0) effects.splice(i, 1);
+        }
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`タローマン HP: ${player.hp}`, 20, 30);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(20, 40, 200, 15);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(20, 40, player.hp * 2, 15);
+
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`芸術爆発ゲージ: ${player.gauge}%`, 20, 75);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(20, 85, 200, 10);
+        ctx.fillStyle = '#9b59b6';
+        ctx.fillRect(20, 85, player.gauge * 2, 10);
+
+        ctx.textAlign = 'right';
+        ctx.fillText(`${enemy.name} HP: ${Math.max(0, enemy.hp)}`, GAME_WIDTH - 20, 30);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(GAME_WIDTH - 220, 40, 200, 15);
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(GAME_WIDTH - 220, 40, Math.max(0, enemy.hp / enemy.maxHp * 200), 15);
+
+        ctx.textAlign = 'center';
+        ctx.fillText(`STAGE ${currentStage + 1} / 9`, GAME_WIDTH / 2, 30);
+      }
+
+      if (gameState === 'CLEAR') {
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = 'bold 40px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('全奇獣 撃破！べらぼうな勝利！', GAME_WIDTH/2, 200);
+      }
+
+      if (gameState === 'GAMEOVER') {
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 40px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('爆発失敗... 芸術は爆発だ！', GAME_WIDTH/2, 200);
+      }
+    }
+
+    function setState(state) {
+      gameState=state;
+      document.getElementById('title-menu').style.display=state==='TITLE'?'block':'none';
+      document.getElementById('difficulty-menu').style.display=state==='SELECT_DIFF'?'block':'none';
+      document.getElementById('end-menu').style.display=(state==='CLEAR'||state==='GAMEOVER')?'block':'none';
+    }
+    function startGame(diff) { difficulty=diff; currentStage=0; isBuildingTaroman=false; initGame(); setState('PLAYING'); }
+    document.getElementById('start-button').addEventListener('click',()=>setState('SELECT_DIFF'));
+    document.querySelectorAll('#difficulty-menu .diff').forEach(btn=>{
+      const go=()=>startGame(btn.dataset.diff);
+      btn.addEventListener('click',go);
+      btn.addEventListener('touchend',(e)=>{e.preventDefault();go();},{passive:false});
+    });
+    document.getElementById('restart-button').addEventListener('click',()=>setState('TITLE'));
+    function handleGameTap(e) {
+      if(e.target?.closest?.('#menu-overlay')) return;
+      if(e.cancelable)e.preventDefault();
+      const rect=canvas.getBoundingClientRect(); if(!rect.width||!rect.height)return;
+      const clickY=(e.clientY-rect.top)*(GAME_HEIGHT/rect.height);
+      if(gameState==='TITLE')setState('SELECT_DIFF');
+      else if(gameState==='SELECT_DIFF'){if(clickY>=135&&clickY<210)startGame('EASY');else if(clickY>=205&&clickY<280)startGame('NORMAL');else if(clickY>=275&&clickY<355)startGame('NANI_KORE');}
+      else if(gameState==='GAMEOVER'||gameState==='CLEAR')setState('TITLE');
+    }
+    canvas.addEventListener('pointerup',handleGameTap,{passive:false});
+    setState('TITLE');
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    gameLoop();
+  </script>
+</body>
+</html>
